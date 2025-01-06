@@ -1,0 +1,186 @@
+```{r}
+####Herfindahl-Hirschman Index Gene Scoring and Plot for Gene Categories####
+
+#The purpose of this code is to generate a table containing the Herfindahl–Hirschman Index (HHI) score of selected genes belonging to different categories (e.g. apoptosis, cell cycle), calculated across clusters. This table also contains log2FC information from the cluster of maximum induction. From this table, a plot is generated using ggplot2 showing the HHI score of genes from different categories.
+
+#This code assumes your data is in Seurat object form
+```
+
+```{r}
+#Load the required libraries:
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+```
+
+```{r}
+# Step 1: Select the genes you want to conduct scoring on. For our analysis, we chose genes belonging to 9 categories including those encoding ligands and transcription factors. 
+
+#Genes of interest (GOI) should be a vector containing all genes you want to consider. 
+#e.g.
+GOI<-c("gene1","gene2","gene3","...")
+#or, e.g. 
+GOI<-rownames(df_all_GOI)
+#or, e.g.
+GOI<-df_all_GOI$gene_name
+
+#Note: You will likely want to apply filters to these genes before using them (e.g. is the gene found in dataset?, minimum expression levels, log2FC between conditions, p-val of that change). You should have category information for the genes chosen (e.g. "Apoptosis"), which will later be used for plotting. The easiest way to do this would probably be to have a data frame containing all gene names and their categories as two columns. 
+```
+
+```{r}
+#Step 2: Generate a table with the average expression of your chosen genes in each cluster
+
+#Subset your object so that it only contains cells in the condition/group you want to analyze. For our paper, we typically did analysis on the irradiated condition only. 
+Idents(seurat_object)<- "condition.ident"
+R4K<-subset(seurat_object, ident="4000_Rads")
+
+#Extract average expression values for each cluster in the object. Be sure to use de-logged values (AverageExpression() in Seurat is one way to do this)
+avg_expression_df<-as.data.frame(t(as.data.frame(AverageExpression(object = R4K,group.by = "subregion.ident",features=GOI,layer="data"))))
+
+#OPTIONAL: AverageExpression() changes the names of clusters. You may choose to use gsub to revert the modifed names to the original names. For example, I used this to revert in my specific instance: 
+avg_expression_df$subregion.ident <- gsub("RNA.", "", avg_expression_df$subregion.ident)
+avg_expression_df$subregion.ident <- gsub('[.]', "_", avg_expression_df$subregion.ident)
+avg_expression_df$subregion.ident <- gsub('e_P', "e-P", avg_expression_df$subregion.ident)
+avg_expression_df$subregion.ident <- gsub('e_N', "e-N", avg_expression_df$subregion.ident)
+
+
+#Some table rearrangements to make it easier to work with. 
+for (gene in GOI){
+
+summary_gene_i <- avg_expression_df %>%
+           dplyr::select(gene,subregion.ident)%>%
+           dplyr::rename(Avg_Expression_No_Log=gene)
+summary_gene_i$gene_name<-gene
+
+
+if (gene==GOI[1]){
+Info_Table_R4K<-summary_gene_i
+}else{
+Info_Table_R4K<-rbind(Info_Table_R4K,summary_gene_i)
+}
+  
+}
+
+```
+
+```{r}
+#Step 3: Use the average expression values to calculate HHI values for each gene. 
+
+HHI_Table <- data.frame(gene_name=character(), HHI_R4K=numeric()) 
+for (gene in GOI){
+  
+plot_table<-Info_Table_R4K%>%
+  dplyr::filter(gene_name==gene)%>%
+  mutate(Percent_Mean_No_Log= Avg_Expression_No_Log/sum(Avg_Expression_No_Log
+))
+
+plot_table<-as.data.frame(plot_table)
+
+HHI_i<-sum(plot_table$Percent_Mean_No_Log^2)
+
+HHI_Table<-HHI_Table%>% 
+  add_row(gene_name = gene, HHI_R4K = HHI_i)
+}
+
+#the resulting table has two columns: gene_name and HHI score for each gene ("HHI_R4K")
+HHI_R4K<-HHI_Table
+HHI_R4K
+
+#Note: If desired, you can repeat this entire process for different conditions or clusters (e.g. unirradiated condition, lower resolution clustering) and join the two tables together with dplyr's inner_join() to have one table with different HHI values.
+```
+
+```{r}
+#Step 4: Add log2FC information from the cluster of maximum induction for each gene.
+
+#This code will add log2FC values for each cluster and tell you which cluster had the greatest change. Alternatively, instead of this, you could just use the log2FC values from bulk comparison of conditions (e.g. log2FC values for irradiated vs unirradiated condition considering all cells in each condition).
+
+#Extract the number of clusters 
+Idents(seurat_object)<-"subregion.ident"
+num<-levels(seurat_object)
+
+#Generate a table with log2FC values for all genes of interest in each cluster
+for(i in num){
+#for each cluster, subset it out
+subset_i<-subset(seurat_object, ident=i)
+#Set its default identity to condition 
+Idents(subset_i)<-"condition.ident"
+
+#Run find markers on the cluster for all genes of interest, comparing conditions
+markers_i<-FindMarkers(subset_i, ident.1 = "4000_Rads", features=GOI,min.pct = 0.0,min.diff.pct = 0,logfc.threshold = 0,only.pos=T)
+#generate a table with log2FC information for each gene in the cluster, add it to a table
+markers_i$ident_of_interest<-i
+markers_i<-rownames_to_column(markers_i, "gene_name")
+
+markers_i<-markers_i[order(markers_i$avg_log2FC,decreasing = T),]
+
+if (i==num[1]){
+all_markers<-markers_i
+}
+
+if(i!=num[1]) {
+all_markers<-rbind(all_markers, markers_i)
+}
+
+}
+
+#Filter this table to reveal the cluster of maximum change for each gene. I also filtered on pct.1 and avg_log2FC values to remove genes that were lowly expressed or lowly induced.
+#Note: if you did want to filter here on adjusted p-val, you would want to correct the p-value on the number of clusters (e.g. 35 clusters = 35 tests = multiply value by 35). I found this to be too stringent (my initial set genes were previously filtered on adjusted p-value when comparing conditions). 
+
+max_avg_log2FC_df<-all_markers%>%
+  filter(pct.1>0.05)%>%
+  filter(avg_log2FC>0.25)%>%
+  group_by(gene_name)%>%
+  filter(avg_log2FC==max(avg_log2FC))
+
+#Join the log2FC table you just generated with the HHI table generated previously
+Joint_HHI_FC_Region_df<-HHI_R4K%>%
+  inner_join(max_avg_log2FC_df,by="gene_name")
+
+#This table has HHI information on each gene, and the Findmarkers information for the cluster of maximum induction for each gene.
+Joint_HHI_FC_Region_df
+```
+
+```{r}
+#Step 5: Add gene category column to the data frame
+
+#At this point, you should add the category information for each gene. There are many ways to do this. The simplest way would be to inner_join() a table containing a gene name column and a category column with the table you just generated. 
+
+#e.g., if you had such a table named "df_gene_categories":
+Joint_HHI_FC_Region_df<-Joint_HHI_FC_Region_df%>%
+  inner_join(df_gene_categories,by="gene_name")%>%
+  dplyr::rename(Group = gene_name)
+
+
+#In my case, I added a new column using seperate vectors of genes for each category. For example, Transcription_Factors is a vector subset of genes from the original genes of interest belonging to transcription factors. Change the number and names of categories as needed.
+
+Joint_HHI_FC_Region_df<-Joint_HHI_FC_Region_df%>%
+  mutate(
+    Group = case_when(
+      gene_name %in% Transcription_Factors ~ "TF",
+      gene_name %in% DDR ~ "DDR",
+      gene_name %in% ROS ~ "ROS",
+      gene_name %in% Ligands ~ "Ligands",
+      gene_name %in% Apoptosis ~ "Apoptosis",
+      gene_name %in% Receptors ~ "Receptors",
+      gene_name %in% Cell_Cycle ~ "Cell Cycle",
+      gene_name %in% Kinases ~ "Kinases",
+      gene_name %in% Phosphatases ~ "Phosphatases"
+    )
+  )
+```
+
+```{r}
+#Step 6: Plot the information. 
+
+#There are many ways to use the table above to create plots with ggplot2. In the below example, I make a plot showing each category of genes side by side on the x-axis. Each point in the groups are a gene in the category, and their position on the y-axis is that gene's HHI score. The color of each point is mapped to the log2FC in the cluster of maximum induction for each gene. A red bar was also added to each category representing the mean HHI of that category. 
+
+#OPTIONAL: For plotting, may want to set factor levels for the groups. This determines the plotting order of each group in ggplot2.
+Joint_HHI_FC_Region_df$Group<-factor(Joint_HHI_FC_Region_df$Group, levels=c("Apoptosis","DDR","ROS","Cell Cycle","TF","Phosphatases","Kinases","Ligands","Receptors"))
+
+plot<-ggplot(Joint_HHI_FC_Region_df%>%arrange(avg_log2FC),aes(x=Group,y=HHI_R4K))+geom_violin(color="grey50",fill="grey50")+geom_point(aes(color=avg_log2FC),alpha=0.7,position=position_jitter(width=0.2,height=0,seed=1),size=5)+stat_summary(fun = "mean",geom = "crossbar",color = "red2",width=0.3) +geom_text_repel(aes(label = ifelse(avg_log2FC>2|HHI_R4K>0.075, gene_name, "")),max.overlaps=100, force=2.5,position=position_jitter(width=0.2,height=0,seed=1),fontface="bold",size=4.5) + scale_colour_viridis_c(option="turbo")+
+theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1,size=20, face="bold",color="black"),axis.text.y= element_text(size=20,face="bold",color="black"),axis.title.x = element_blank(),axis.title.y=element_text(size=20,face="bold",color="black"), legend.text = element_text(size=20,color="black",face="bold"),legend.title = element_text(size=20,color="black",face="bold"),legend.position = c(0.125, 0.75),legend.key.size = unit(2,"line"),legend.background = element_rect(fill="transparent",size=2, linetype="solid", colour ="transparent"))+ylab("Expression HHI 4000 Rads")+ labs(colour = "Max Log2FC")  
+
+plot
+
+ggsave('Complete_path_to_save_file',dpi=600, width = 7*1.5,height = 7)
+```

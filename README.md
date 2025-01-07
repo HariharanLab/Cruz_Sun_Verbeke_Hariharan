@@ -13,12 +13,13 @@ This respository is under construction.
 ### [Herfindahl-Hirschman Index Gene Scoring and Plot for Gene Categories](https://github.com/HariharanLab/Cruz_Sun_Verbeke_Hariharan/blob/main/R_code_scRNA_analysis/Herfindahl-Hirschman%20Index%20Gene%20Scoring%20and%20Plot%20for%20Gene%20Categories.Rmd)
 
 Example code used to generate a table containing the Herfindahl–Hirschman Index (HHI) score of selected genes belonging to different categories (e.g. apoptosis, cell cycle), calculated across clusters. This table also contains log2FC information from the cluster of maximum induction. From this table, a plot like the one shown is generated using ggplot2, showing the HHI score of genes from different categories. 
+
 <img src="https://github.com/user-attachments/assets/a2ac3748-889d-4159-9561-090716423721" width="800">
 
 ### [Euclidean Expression Distance](https://github.com/HariharanLab/Cruz_Sun_Verbeke_Hariharan/blob/main/R_code_scRNA_analysis/Euclidean%20Expression%20Distance.Rmd)
 
 Example code used to calculate the Euclidean distance of gene expression between two conditions for genes of interest, considering the proportion of expression in each cluster as a dimension. This can give a general idea of the similarity of overall expression pattern in the same tissue in different conditions. The higher the value, the more different the expression pattern of a given gene in different conditions. The table generated with this code contains the Euclidean expression distance of genes of interested between two conditions and their HHI scores in each condition. From this table, a plot like the one shown is generated using ggplot2, showing the Euclidean Expression Distance between conditions (y-axis) and its HHI score in irradiated tissue (x-axis)
-<img src="(https://github.com/user-attachments/assets/1d182414-42f3-4861-951d-d4d032e17bed)" width="800">
 
+<img src="https://github.com/user-attachments/assets/18d9f267-2262-4918-b22d-105983e9e00b" width="800">
 
 

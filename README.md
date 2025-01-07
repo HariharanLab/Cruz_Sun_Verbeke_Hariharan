@@ -12,6 +12,5 @@ This respository is under construction.
  
 ### Herfindahl-Hirschman Index Gene Scoring and Plot for Gene Categories
 Example code used to generate a table containing the Herfindahl–Hirschman Index (HHI) score of selected genes belonging to different categories (e.g. apoptosis, cell cycle), calculated across clusters. This table also contains log2FC information from the cluster of maximum induction. From this table, a plot like the one shown is generated using ggplot2, showing the HHI score of genes from different categories. 
-![image](https://github.com/user-attachments/assets/a2ac3748-889d-4159-9561-090716423721)
-<img src="[https://your-image-url.type](https://github.com/user-attachments/assets/a2ac3748-889d-4159-9561-090716423721)" width="100" height="100">
+<img src="https://github.com/user-attachments/assets/a2ac3748-889d-4159-9561-090716423721" width="800">
 
